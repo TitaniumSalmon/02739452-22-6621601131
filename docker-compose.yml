@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: toyota
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toyota_dev_password}
+      POSTGRES_DB: toyota_prices
+    ports: ["5433:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toyota -d toyota_prices"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  airflow:
+    image: apache/airflow:2.10.5-python3.11
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://toyota:${POSTGRES_PASSWORD:-toyota_dev_password}@postgres:5432/toyota_prices
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-local-dev-secret-key-change-me}
+      PYTHONPATH: /opt/airflow
+      TOYOTA_DB_HOST: postgres
+      TOYOTA_DB_PORT: "5432"
+      TOYOTA_DB_NAME: toyota_prices
+      TOYOTA_DB_USER: toyota
+      TOYOTA_DB_PASSWORD: ${POSTGRES_PASSWORD:-toyota_dev_password}
+      _PIP_ADDITIONAL_REQUIREMENTS: "apache-airflow-providers-postgres==5.14.0 requests==2.32.3 beautifulsoup4==4.12.3 lxml==5.3.0 pandas==2.2.3"
+    ports: ["8080:8080"]
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./sql:/opt/airflow/sql
+    command: bash -c "airflow db migrate && (airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true) && (airflow scheduler & exec airflow webserver)"
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      TOYOTA_DB_HOST: postgres
+      TOYOTA_DB_PORT: "5432"
+      TOYOTA_DB_NAME: toyota_prices
+      TOYOTA_DB_USER: toyota
+      TOYOTA_DB_PASSWORD: ${POSTGRES_PASSWORD:-toyota_dev_password}
+    ports: ["8501:8501"]
+volumes:
+  pgdata:

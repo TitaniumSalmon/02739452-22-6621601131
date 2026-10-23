@@ -1,0 +1,7 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir streamlit pandas plotly psycopg2-binary requests beautifulsoup4 lxml
+COPY web/ ./web/
+EXPOSE 8501
+CMD ["streamlit", "run", "web/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
