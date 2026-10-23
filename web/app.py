@@ -15,9 +15,14 @@ def connect():
 def load_data():
     with connect() as conn:
         try:
-            return pd.read_sql_query('SELECT source, source_url, model, variant, year, price_thb, price_type, scraped_at, quality_status FROM vehicle_prices ORDER BY price_thb',conn)
+            return pd.read_sql_query('''SELECT cp.id AS canonical_id, o.source, o.source_url,
+                cp.model, o.source_model AS variant, o.year, cp.price_thb, o.price_type,
+                o.scraped_at, cp.quality_status
+                FROM canonical_vehicle_prices cp
+                JOIN price_source_observations o ON o.canonical_price_id = cp.id
+                ORDER BY cp.price_thb''',conn)
         except Exception:
-            return pd.DataFrame(columns=['source','source_url','model','variant','year','price_thb','price_type','scraped_at','quality_status'])
+            return pd.DataFrame(columns=['canonical_id','source','source_url','model','variant','year','price_thb','price_type','scraped_at','quality_status'])
 
 @st.cache_data(ttl=60)
 def load_runs():
@@ -31,7 +36,7 @@ if df.empty:
 else:
     df['price_thb']=pd.to_numeric(df['price_thb'])
     c1,c2,c3,c4=st.columns(4)
-    c1.metric('จำนวนรายการ',f'{len(df):,}')
+    c1.metric('รายการหลังตัดซ้ำ',f'{df.canonical_id.nunique():,}')
     c2.metric('ราคาต่ำสุด',f"฿{df.price_thb.min():,.0f}")
     c3.metric('ราคาสูงสุด',f"฿{df.price_thb.max():,.0f}")
     c4.metric('แหล่งข้อมูล',str(df.source.nunique()))
@@ -49,7 +54,7 @@ else:
         st.plotly_chart(px.bar(chart,x='source',y='price_thb',title='ราคา Median แยกตามแหล่งข้อมูล',labels={'source':'แหล่งข้อมูล','price_thb':'ราคา (บาท)'}),use_container_width=True)
         st.plotly_chart(px.strip(filtered,x='price_thb',y='source',color='source',hover_data=['model','price_type'],stripmode='overlay',title='การกระจายตัวของราคาแต่ละรายการ',labels={'price_thb':'ราคา (บาท)','source':'แหล่งข้อมูล','model':'รุ่นรถ','price_type':'ประเภทราคา'}),use_container_width=True)
     st.subheader('ตารางข้อมูลรถยนต์')
-    st.dataframe(filtered[['source','model','variant','year','price_thb','price_type','scraped_at','source_url']].rename(columns={'source':'แหล่งข้อมูล','model':'รุ่นรถ','variant':'รุ่นย่อย','year':'ปี','price_thb':'ราคา (บาท)','price_type':'ประเภทราคา','scraped_at':'เวลาที่ดึงข้อมูล','source_url':'URL'}),use_container_width=True,hide_index=True)
+    st.dataframe(filtered[['source','model','variant','year','price_thb','price_type','scraped_at','source_url']].rename(columns={'source':'แหล่งข้อมูล','model':'รุ่นหลัก','variant':'ชื่อรุ่นบนแหล่งข้อมูล','year':'ปี','price_thb':'ราคา (บาท)','price_type':'ประเภทราคา','scraped_at':'เวลาที่ดึงข้อมูล','source_url':'URL'}),use_container_width=True,hide_index=True)
     st.download_button('ดาวน์โหลด CSV',filtered.to_csv(index=False).encode('utf-8-sig'),'toyota_prices.csv','text/csv')
 
 st.divider()
